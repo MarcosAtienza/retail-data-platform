@@ -25,8 +25,11 @@
 - Hierarchical namespace: Enabled
 - Container: retail-data
 
-## Data Lake Structure
+## Container Structure
 
-- bronze/: raw source data
-- silver/: cleaned and transformed data
-- gold/: analytics-ready data
+Container: retail-data
+Access level: Private
+
+- bronze/olist/: original source data
+- silver/olist/: cleaned and transformed data
+- gold/retail/: analytics-ready data
