@@ -1,160 +1,74 @@
-# Dataset overview
+# Data Dictionary — Olist processed datasets
 
-The Brazilian E-Commerce Public Dataset by Olist contains
-anonymized marketplace transactions from Brazil, covering
-approximately September 2016 to August 2018. This project
-uses 5 of the 9 files that form the entire dataset. This
-dictionary explains the source columns of said files.
+These are expected source-style names; adjust if your Silver transformations renamed columns.
 
-## Column-by-column dictionary
+| Dataset | Grain | Primary/composite key | Foreign keys |
+|---|---|---|---|
+| `orders` | One order | `order_id` | `customer_id` → `customers.customer_id` |
+| `order_items` | One item within an order | (`order_id`, `order_item_id`) | `order_id` → orders; `product_id` → products |
+| `products` | One product | `product_id` | `product_category_name` → category translation (optional) |
+| `customers` | One customer record | `customer_id` | Referenced by orders |
+| `product_category_name_translation` | One source category | `product_category_name` | Referenced by products |
 
-### olist_customers_dataset.csv
+## orders.parquet
 
-Customer records and customer location
+| Column | Meaning |
+|---|---|
+| `order_id` | Order identifier |
+| `customer_id` | Customer record identifier |
+| `order_status` | Order lifecycle status |
+| `order_purchase_timestamp` | Purchase time |
+| `order_approved_at` | Approval time |
+| `order_delivered_carrier_date` | Carrier handoff time |
+| `order_delivered_customer_date` | Customer delivery time |
+| `order_estimated_delivery_date` | Estimated delivery time |
 
-+======================================================================================================+
-| Column                   | Typical type | Use                                                        |
-+======================================================================================================+
-| customer_id              | String       | Identifier for the customer record associated with an      |
-|                          |              | order; joins to orders.                                    |
-+------------------------------------------------------------------------------------------------------+
-| customer_unique_id       | String       | Persistent identifier for the real customer across orders; |
-|                          |              | useful for repeat-purchase analysis.                       |
-+------------------------------------------------------------------------------------------------------+
-| customer_zip_code_prefix | String       | First five digits of the customer's Brazilian              |
-|                          |              | postal code; keep as text to preserve leading zeros.       |
-+------------------------------------------------------------------------------------------------------+
-| customer_city            | String       | Customer city.                                             |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
-| customer_state           | String       | Two-letter Brazilian state abbreviation.                   |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
+## order_items.parquet
 
-### olist_order_items_dataset.csv
+| Column | Meaning |
+|---|---|
+| `order_id` | Parent order |
+| `order_item_id` | Item sequence number within order |
+| `product_id` | Product reference |
+| `seller_id` | Seller reference (seller table not in scope) |
+| `shipping_limit_date` | Seller shipping deadline |
+| `price` | Item price |
+| `freight_value` | Item freight value |
 
-Line items with each order
+## products.parquet
 
-+======================================================================================================+
-| Column                   | Typical type | Use                                                        |
-+======================================================================================================+
-| order_id                 | String       | Order identifier; joins to the orders table.               |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
-| order_item_id            | Integer      | Sequence number for an item line within an order; together |
-|                          |              | with order_id forms the practical line key.                |
-+------------------------------------------------------------------------------------------------------+
-| product_id               | String       | Product identifier; joins to products.                     |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
-| seller_id                | String       | Seller identifier; joins to sellers.                       |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
-| shipping_limit_date      | Datetime     | Deadline by which the seller should hand the item to the   |
-|                          |              | carrier.                                                   |
-+------------------------------------------------------------------------------------------------------+
-| price                    | Decimal      | Price of the product line, excluding freight.              |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
-| freight_value            | Decimal      | Shipping/freight amount allocated to this item.            |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
+| Column | Meaning |
+|---|---|
+| `product_id` | Product identifier |
+| `product_category_name` | Source category |
+| `product_name_lenght` | Product name length; source spelling retained |
+| `product_description_lenght` | Description length; source spelling retained |
+| `product_photos_qty` | Number of product photos |
+| `product_weight_g` | Weight in grams |
+| `product_length_cm` | Length in centimetres |
+| `product_height_cm` | Height in centimetres |
+| `product_width_cm` | Width in centimetres |
 
-### olist_orders_dataset.csv
+## customers.parquet
 
-Order header and lifecycle timestamps.
+| Column | Meaning |
+|---|---|
+| `customer_id` | Customer record identifier used in orders |
+| `customer_unique_id` | Identifier grouping customer records across orders |
+| `customer_zip_code_prefix` | Brazilian postal code prefix |
+| `customer_city` | City |
+| `customer_state` | State abbreviation |
 
-+======================================================================================================+
-| Column                   | Typical type | Use                                                        |
-+======================================================================================================+
-| order_id                 | String       | Unique order identifier.                                   |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
-| customer_id              | String       | Customer record identifier; joins to customers.            |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
-| order_status             | String       | Order lifecycle status (delivered, shipped, canceled,      |
-|                          |              | processing or unavailable).                                |
-+------------------------------------------------------------------------------------------------------+
-| order_purchase_timestamp | Datetime     | Date/time when the customer placed the order.              |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
-| order_approved_at        | Datetime     | Date/time when the order/payment was approved; may be      |
-|                          |              | null.                                                      |
-+------------------------------------------------------------------------------------------------------+
-| order_delivered_carrier_ | Datetime     | Date/time the order was handed to the logistics carrier;   |
-| date                     |              | may be null.                                               |
-+------------------------------------------------------------------------------------------------------+
-| order_delivered_customer | Datetime     | Date/time when the order was delivered to the customer;    |
-| _date                    |              | may be null.                                               |
-+------------------------------------------------------------------------------------------------------+
-| order_estimated_delivery | Datetime     | Estimated delivery date communicated to the customer.      |
-| _date                    |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
+## product_category_name_translation.parquet
 
-### olist_products_dataset.csv
+| Column | Meaning |
+|---|---|
+| `product_category_name` | Source category name |
+| `product_category_name_english` | English category name |
 
-Product catalogue attributes and physical dimensions.
+## Modelling cautions
 
-+======================================================================================================+
-| Column                   | Target type  | Use                                                        |
-+======================================================================================================+
-| product_id               | String       | Unique product identifier.                                 |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
-| product_category_name    | String       | Product category name. generally in Portuguese; can join   |
-|                          |              | to category translation.                                   |
-+------------------------------------------------------------------------------------------------------+
-| product_name_lenght      | Numeric      | Number of characters in the product name. Original source  |
-|                          |              | spelling is "lenght".                                      |
-+------------------------------------------------------------------------------------------------------+
-| product_description      | Numeric      | Number of characters in the product description. Original  |
-| _lenght                  |              | source spelling is "lenght".                               |
-+------------------------------------------------------------------------------------------------------+
-| product_photos_qty       | Numeric      | Number of photos published for the product.                |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
-| product_weight_g         | Numeric      | Product weight in grams.                                   |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
-| product_length_cm        | Numeric      | Product length in centimeters.                             |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
-| product_height_cm        | Numeric      | Product height in centimeters.                             |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
-| product_width_cm         | Numeric      | Product width in centimeters.                              |
-|                          |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
-
-### product_category_name_translation.csv
-
-+======================================================================================================+
-| Column                   | Target type  | Use                                                        |
-+======================================================================================================+
-| product_category_name    | String       | Product category name in Portuguese; join key to the       |
-|                          |              | products table.                                            |
-+------------------------------------------------------------------------------------------------------+
-| product_category_name    | String       | English translation of the product category.               |
-| _english                 |              |                                                            |
-+------------------------------------------------------------------------------------------------------+
-
-## Main relationships
-
-- customers.customer_id 1 -> N orders.customer_id
-- orders.order_id 1 -> N order_items.order_id
-- products.product_id 1 -> N order_items.product_id
-- products.product_category_name 1 -> 1 product_category_name_translation.product_category_name
-
-## Grain and modelling notes
-
-- Orders: one row per order_id.
-- Order items: one row per order_id + order_item_id. Do not treat order_id alone as unique in this file.
-- Postal code prefixes are identifiers, not measures; must be sored as strings so leading zeros are preserved.
-- Raw source CSVs must be preserved unchanged. Parsing, standardization, deduplication and validation must be
-applied in a downstream clean/staging layer.
-
-## Source and reference
-
-Original dataset page: https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce
-Schema reference used for this documentation: https://github.com/zeesshhaannss/Olist-E-Commerce-Dashboard/blob/main/Data_Dictionary.md
+- Join orders to items on `order_id`, items to products on `product_id`, orders to customers on `customer_id`.
+- Join product categories to translations on `product_category_name`.
+- `customer_unique_id` is not the key used by the orders-to-customers relationship.
+- Avoid duplicating order-level metrics after joining orders to multiple item rows.

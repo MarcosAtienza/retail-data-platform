@@ -1,143 +1,74 @@
 # Data Quality Rules
 
-## 1. Purpose
+31 automated checks for five processed Olist datasets. Run `python src/validate_data.py` for console results and `python src/generate_quality_report.py` for a CSV in `reports/data_quality/data_quality_report.csv`.
 
-This document defines the initial data quality rules for the Retail Data Platform project.
+**ERROR** checks produce `FAIL` when problems exist; **WARNING** checks produce `WARNING`. Overall status is `FAILED`, `PASSED_WITH_WARNINGS`, or `PASSED`.
 
-The purpose of these rules is to ensure that the processed data is reliable, consistent and suitable for further transformations and analytics.
+A count can represent rows, duplicate-key groups, or distinct category values. Different rules can count the same row. Checks never modify source data.
 
-The validations are implemented using Python and DuckDB against the processed Parquet files.
+The expected schema is verified before running SQL. Rules assume all five Parquet files represent the same processing snapshot.
 
-## 2. Scope
+## Orders
 
-The initial validation process covers the following tables:
+| Rule | Check | Severity | Counting unit |
+|---|---|---|---|
+| DQ-001 | Null order IDs | ERROR | Rows |
+| DQ-002 | Duplicate order IDs | ERROR | Duplicate key groups |
+| DQ-003 | Null customer IDs in orders | ERROR | Rows |
+| DQ-004 | Invalid order statuses | ERROR | Rows |
+| DQ-005 | Approval before purchase | ERROR | Rows |
+| DQ-006 | Delivered orders missing delivery timestamp | WARNING | Rows |
+| DQ-007 | Carrier timestamp before approval | WARNING | Rows |
+| DQ-008 | Customer delivery before carrier timestamp | WARNING | Rows |
+| DQ-009 | Orders with unknown customer | ERROR | Rows |
 
-- `orders`
-- `order_items`
+## Order Items
 
-Input files:
+| Rule | Check | Severity | Counting unit |
+|---|---|---|---|
+| DQ-010 | Null order or item IDs | ERROR | Rows |
+| DQ-011 | Duplicate order-item keys | ERROR | Duplicate key groups |
+| DQ-012 | Order items with unknown order | ERROR | Rows |
+| DQ-013 | Order items with missing or unknown product | ERROR | Rows |
+| DQ-014 | Negative item prices | ERROR | Rows |
+| DQ-015 | Negative freight values | ERROR | Rows |
+| DQ-016 | Null item price or freight | ERROR | Rows |
 
-- `data/processed/orders.parquet`
-- `data/processed/order_items.parquet`
+## Products
 
-Implementation:
+| Rule | Check | Severity | Counting unit |
+|---|---|---|---|
+| DQ-017 | Null product IDs | ERROR | Rows |
+| DQ-018 | Duplicate product IDs | ERROR | Duplicate key groups |
+| DQ-019 | Products without category | WARNING | Rows |
+| DQ-020 | Negative product weight or dimensions | ERROR | Rows |
+| DQ-021 | Negative product text lengths or photo count | ERROR | Rows |
+| DQ-022 | Product categories without translation | WARNING | Distinct category values |
 
-- Python script: `src/validate_data.py`
-- SQL engine: DuckDB
+## Customers
 
-## 3. Data Quality Rules
+| Rule | Check | Severity | Counting unit |
+|---|---|---|---|
+| DQ-023 | Null customer IDs | ERROR | Rows |
+| DQ-024 | Duplicate customer IDs | ERROR | Duplicate key groups |
+| DQ-025 | Null customer unique IDs | ERROR | Rows |
+| DQ-026 | Customers with missing city or state | WARNING | Rows |
+| DQ-027 | Invalid state code length | WARNING | Rows |
 
-| Rule ID | Table | Column(s) | Description | Severity |
-|---|---|---|---|---|
-| DQ-001 | orders | order_id | Order ID must not be null. | Error |
-| DQ-002 | orders | order_id | Order ID must be unique. | Error |
-| DQ-003 | order_items | order_id, order_item_id | The combination of order ID and item ID must be unique. | Error |
-| DQ-004 | order_items | order_id | Every order ID in order_items must exist in orders. | Error |
-| DQ-005 | order_items | price | Price must not be negative. | Error |
-| DQ-006 | order_items | freight_value | Freight value must not be negative. | Error |
-| DQ-007 | orders | Timestamp columns | Date columns must have the expected TIMESTAMP data type. | Error |
-| DQ-008 | orders | Order timestamps | Actual order dates must follow a consistent chronological sequence. | Error |
-| DQ-009 | orders | Delivery timestamps | Missing dates must be evaluated according to the order status. | Warning |
-| DQ-010 | orders | order_estimated_delivery_date | Estimated delivery date must not precede purchase date. | Warning |
+## Category Translation
 
-## 4. Validation Details
+| Rule | Check | Severity | Counting unit |
+|---|---|---|---|
+| DQ-028 | Null source categories in translation | ERROR | Rows |
+| DQ-029 | Duplicate source categories in translation | ERROR | Duplicate key groups |
+| DQ-030 | Missing English translation | ERROR | Rows |
+| DQ-031 | Unused translation categories | WARNING | Distinct category values |
 
-### 4.1. Primary Key Validation
+## Notes
 
-The `orders` table must contain one unique, non-null `order_id` per order.
-
-The `order_items` table uses a composite key:
-
-- `order_id`
-- `order_item_id`
-
-This is necessary because an order can contain multiple items.
-
-### 4.2. Referential Integrity
-
-Every `order_id` in `order_items` must have a corresponding record in `orders`.
-
-Orphan records indicate that an order item references an order that does not exist in the parent table.
-
-### 4.3. Numeric Validation
-
-The following conditions are expected:
-
-- `price` must be greater than or equal to zero.
-- `freight_value` must be greater than or equal to zero.
-
-Negative values must be investigated before the data is considered reliable.
-
-### 4.4. Timestamp Validation
-
-The following columns in `orders` are expected to have the `TIMESTAMP` data type:
-
-- `order_purchase_timestamp`
-- `order_approved_at`
-- `order_delivered_carrier_date`
-- `order_delivered_customer_date`
-- `order_estimated_delivery_date`
-
-The actual order lifecycle should follow this chronological sequence when the relevant dates are available:
-
-1. Purchase timestamp.
-2. Approval timestamp.
-3. Carrier delivery timestamp.
-4. Customer delivery timestamp.
-
-The estimated delivery date is a prediction rather than an actual event. It is therefore validated separately.
-
-### 4.5. Missing Dates and Order Status
-
-Missing timestamps are not automatically considered data quality errors.
-
-Their validity depends on the order status and lifecycle.
-
-For example:
-
-- A cancelled order may not have a delivery date.
-- An order that has not yet been delivered may not have a customer delivery date.
-- Some orders may not have reached the approval or shipping stages.
-
-Missing dates should therefore be evaluated using the corresponding `order_status`.
-
-## 5. Severity Levels
-
-Two severity levels are defined:
-
-**Error**
-
-A violation that indicates a potential integrity or consistency problem. It requires investigation before the affected data is considered reliable.
-
-**Warning**
-
-An unusual or incomplete value that may be legitimate depending on the business context. It should be reviewed but does not necessarily prevent the pipeline from continuing.
-
-## 6. Validation Approach
-
-The validation process follows these steps:
-
-1. Read the processed Parquet files using DuckDB.
-2. Execute SQL queries for each data quality rule.
-3. Count the records that violate each rule.
-4. Classify the result as PASS or FAIL.
-5. Review failed checks and investigate their causes.
-
-The initial implementation is designed to validate the local Silver-like data layer.
-
-## 7. Future Improvements
-
-The following improvements are planned for future iterations:
-
-- Generate a structured data quality report for each pipeline execution.
-- Store validation results with execution timestamps.
-- Separate critical errors from non-blocking warnings.
-- Prevent unreliable data from being promoted to the Gold layer.
-- Add automated tests for transformation and validation logic.
-- Integrate data quality checks into the complete ingestion and transformation workflow.
-
-## 8. Notes
-
-These rules represent the initial technical assumptions for the Retail Data Platform project.
-
-In a production environment, business-specific validation rules should be confirmed with the relevant business stakeholders before being treated as definitive data quality requirements.
+- DQ-004 accepts the eight observed source statuses, including `created`.
+- DQ-027 checks Brazilian state abbreviations for two characters.
+- `product_name_lenght` and `product_description_lenght` retain the original Olist spelling.
+- Temporal anomalies are reported without automatic correction.
+- Null numeric product attributes are profiled in the notebook; DQ-020/021 only flag negative non-null values.
+- A PASS does not establish complete data correctness.
