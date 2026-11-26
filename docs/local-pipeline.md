@@ -23,10 +23,16 @@ Silver Parquet files (data/processed/)
 Data-quality checks and CSV report (src/generate_quality_report.py)
           |
           v
-reports/data_quality/data_quality_report.csv
+Gold modelling (src/transform_gold.py)
+          |
+          v
+Gold Parquet files (data/gold/)
+          |
+          v
+Gold integrity checks and SQL analytics (src/run_analytics.py)
 ```
 
-The `src/run_pipeline.py` script orchestrates these three stages sequentially. A stage must finish successfully before the next starts.
+The `src/run_pipeline.py` script orchestrates these five stages sequentially. A stage must finish successfully before the next starts.
 
 ## Input datasets
 
@@ -92,6 +98,27 @@ In the verified local run, **26 rules passed, 5 produced warnings, and none fail
 
 Anomalies are reported rather than silently corrected. Counts from different rules may overlap and must not be added to estimate unique affected records.
 
+## Stage 4: Gold analytical models
+
+**Script:** `src/transform_gold.py`
+
+- Reads the five Silver Parquet files.
+- Writes four models to `data/gold/`: `fact_orders`, `fact_order_items`, `dim_products`, and `dim_customers`.
+- Preserves one row per order in `fact_orders` and one row per ordered item in `fact_order_items`.
+- Checks output counts and key uniqueness before promotion.
+- Does not change Raw, Bronze, or Silver files.
+
+## Stage 5: Gold integrity and business SQL
+
+**Script:** `src/run_analytics.py`
+
+- Runs the SQL files in `sql/analytics/` in filename order.
+- Requires `00_gold_model_checks.sql` to return valid, zero-issue results; nonzero issue counts stop the pipeline.
+- Prints analyses of delivered-order value, categories, customer states, delivery performance, and order statuses.
+- Does not write any new dataset.
+
+Business findings and interpretation rules are documented in [`gold-analytics.md`](gold-analytics.md).
+
 ## How to run
 
 1. Use a Python environment with the project dependencies installed (notably `duckdb` and `pandas`).
@@ -108,6 +135,8 @@ This invokes, in order:
 src/ingest_bronze.py
 src/transform_silver.py
 src/generate_quality_report.py
+src/transform_gold.py
+src/run_analytics.py
 ```
 
 Each script can also be run individually during development. For example, to rerun only the checks:
@@ -125,16 +154,15 @@ python src/generate_quality_report.py
 ## Failure handling and limitations
 
 - The orchestrator stops when any stage returns a nonzero exit code.
-- Warnings alone do not stop the pipeline; failed `ERROR` rules do.
+- Warnings alone do not stop the pipeline; failed Silver `ERROR` rules or failed Gold integrity checks do.
 - The stages are **not one global transaction**. If a later stage fails, an earlier successful stage is not rolled back.
 - A staging directory is used before each layer's outputs are promoted, but replacing multiple files is not an all-or-nothing operation if promotion itself is interrupted.
 - Row-count equality detects missing or additional rows, not arbitrary changes to field values.
 - The pipeline is designed for local execution from available CSV files. It is not a scheduled production workflow and has no cloud deployment.
-- The Gold analytics layer is outside this pipeline version and is planned separately.
 
 ## Git repository policy
 
-Source CSVs, generated Bronze/Silver Parquet files, and generated quality-report CSVs are runtime data and should be excluded from Git by `.gitignore`. Commit the source code, reproducible notebooks, and documentation instead.
+Source CSVs, generated Bronze/Silver/Gold Parquet files, and generated quality-report CSVs are runtime data and should be excluded from Git by `.gitignore`. Commit the source code, reproducible notebooks, and documentation instead.
 
 ## Azure context
 

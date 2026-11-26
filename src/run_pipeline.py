@@ -1,4 +1,4 @@
-"""Run the local Olist pipeline from raw CSVs through data-quality reporting.
+"""Run the local Olist pipeline from raw CSVs through Gold analytics.
 
 Usage (from the project root):
     python src/run_pipeline.py
@@ -7,9 +7,11 @@ Stages:
     1. Raw CSV -> Bronze Parquet
     2. Bronze Parquet -> Silver Parquet
     3. Validate 31 data-quality rules and generate a CSV report
+    4. Build the Gold analytical models
+    5. Run Gold integrity checks and business SQL queries
 
 A nonzero exit code stops execution. Quality warnings are permitted; a
-quality ERROR failure makes generate_quality_report.py return a nonzero code.
+quality ERROR failure or a nonzero Gold integrity check stops the pipeline.
 """
 
 from pathlib import Path
@@ -24,6 +26,8 @@ STAGES = (
     ("Bronze ingestion", "src/ingest_bronze.py"),
     ("Silver transformations", "src/transform_silver.py"),
     ("Data-quality validation and CSV report", "src/generate_quality_report.py"),
+    ("Gold analytical models", "src/transform_gold.py"),
+    ("Gold integrity checks and business analytics", "src/run_analytics.py"),
 )
 
 
@@ -70,6 +74,7 @@ def main() -> int:
     print(f"PIPELINE COMPLETED SUCCESSFULLY in {perf_counter() - started:.1f}s.", flush=True)
     print("Report: reports/data_quality/data_quality_report.csv", flush=True)
     print("Quality warnings are reported but do not fail the pipeline.", flush=True)
+    print("Gold integrity checks must all report zero issues.", flush=True)
     return 0
 
 
